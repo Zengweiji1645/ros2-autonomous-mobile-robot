@@ -11,6 +11,8 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -88,6 +90,8 @@ ament_target_dependencies(
   robot_node
   rclcpp
   geometry_msgs
+  visualization_msgs
+  tf2_ros
 )
 
 target_include_directories(
@@ -106,12 +110,14 @@ add_executable(
   src/controller_node.cpp
   src/Controller.cpp
   src/PIDController.cpp
+  src/AStarPlanner.cpp
 )
 
 ament_target_dependencies(
   controller_node
   rclcpp
   geometry_msgs
+  visualization_msgs
 )
 
 target_include_directories(
@@ -122,6 +128,23 @@ target_include_directories(
 
 install(
   TARGETS controller_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+add_executable(
+  astar_test
+  src/astar_test.cpp
+  src/AStarPlanner.cpp
+)
+
+target_include_directories(
+  astar_test
+  PUBLIC
+  include
+)
+
+install(
+  TARGETS astar_test
   DESTINATION lib/${PROJECT_NAME}
 )
 ament_package()
