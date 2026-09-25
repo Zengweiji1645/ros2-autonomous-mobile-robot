@@ -13,6 +13,8 @@ Controller::Controller(
 : distance_pid(kp_distance, ki_distance, kd_distance),
   angle_pid(kp_angle, ki_angle, kd_angle)
 {
+    previous_v = 0.0;
+    previous_omega = 0.0;
 }
  
 
@@ -72,6 +74,54 @@ while (angle_error < -M_PI)
         dt
     );
 
+    double heading_factor = std::cos(angle_error);
+    if (heading_factor < 0.0) {
+        heading_factor = 0.0;
+    }
+    v *= heading_factor;
+    double max_v = 1.0; // Maximum speed limit 
+
+    if (v > max_v) {
+        v = max_v;
+    }
+
+    if (v < -max_v) {
+        v = -max_v;
+    }
+
+    double max_omega = 1.5; // Maximum angular speed limit
+
+    if (omega > max_omega) {
+        omega = max_omega;
+    }
+
+    if (omega < -max_omega) {
+        omega = -max_omega;
+    }
+
+    double max_linear_acceleration = 1.0; // Maximum acceleration limit
+    double max_angular_acceleration = 2.0; // Maximum angular acceleration limit
+    double acceleration = (v - previous_v) / dt;
+    double angular_acceleration = (omega - previous_omega) / dt;
+
+    if (acceleration > max_linear_acceleration) {
+        v = previous_v + max_linear_acceleration * dt;
+    }
+
+    if (acceleration < -max_linear_acceleration) {
+        v = previous_v - max_linear_acceleration * dt;
+    }
+
+    if (angular_acceleration > max_angular_acceleration) {
+        omega = previous_omega + max_angular_acceleration * dt;
+    }
+
+    if (angular_acceleration < -max_angular_acceleration) {
+        omega = previous_omega - max_angular_acceleration * dt;
+    }
+
+    previous_v = v;
+    previous_omega = omega;
 }
 void Controller::reset()
 {

@@ -35,6 +35,8 @@ public:
 
     PIDController distance_pid;
     PIDController angle_pid;
+    double previous_v;
+    double previous_omega;
 
 };
 
