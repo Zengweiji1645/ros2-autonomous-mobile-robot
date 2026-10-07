@@ -14,6 +14,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -87,6 +88,8 @@ add_executable(
   src/Robot.cpp
   src/Odometry.cpp
   src/WheelEncoder.cpp
+  src/Lidar.cpp
+  src/World.cpp
 )
 
 ament_target_dependencies(
@@ -96,6 +99,7 @@ ament_target_dependencies(
   visualization_msgs
   tf2_ros
   nav_msgs
+  sensor_msgs
 )
 
 target_include_directories(

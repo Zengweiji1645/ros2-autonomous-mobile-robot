@@ -3,6 +3,8 @@
 #include "my_robot/Robot.h"
 #include "my_robot/Odometry.h"
 #include "my_robot/WheelEncoder.h"
+#include "my_robot/Lidar.h"
+#include "my_robot/World.h"
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <rclcpp/rclcpp.hpp>
@@ -11,6 +13,7 @@
 #include <visualization_msgs/msg/marker.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <sensor_msgs/msg/laser_scan.hpp>
 
 class RobotNode : public rclcpp::Node
 {
@@ -55,28 +58,32 @@ public:
         // 发布机器人里程计轨迹
         odom_trajectory_publisher_ =
         this->create_publisher<visualization_msgs::msg::Marker>("odom_trajectory",10);
+       
+        // 发布激光雷达扫描数据
+        scan_publisher_ =
+        this->create_publisher<sensor_msgs::msg::LaserScan>("scan",10);
         
         // 创建 TF 广播器    
         tf_broadcaster_ =std::make_unique<tf2_ros::TransformBroadcaster>(this);
+        // 创建静态 TF 广播器
         static_tf_broadcaster_ =std::make_unique<tf2_ros::StaticTransformBroadcaster>(this);
-        
-        // 发布 map 到 odom 的静态变换
-        geometry_msgs::msg::TransformStamped map_to_odom;
-        map_to_odom.header.stamp =this->get_clock()->now();
-    
-        map_to_odom.header.frame_id = "map";
-        map_to_odom.child_frame_id = "odom";
 
-        map_to_odom.transform.translation.x = 0.0;
-        map_to_odom.transform.translation.y = 0.0;
-        map_to_odom.transform.translation.z = 0.0;
+        // 发布 base_link 到 laser_frame 的静态变换
+        geometry_msgs::msg::TransformStamped base_link_to_laser;
+        base_link_to_laser.header.stamp = this->get_clock()->now();
+        base_link_to_laser.header.frame_id = "base_link";
+        base_link_to_laser.child_frame_id = "laser_frame";
 
-        map_to_odom.transform.rotation.x = 0.0;
-        map_to_odom.transform.rotation.y = 0.0;
-        map_to_odom.transform.rotation.z = 0.0;
-        map_to_odom.transform.rotation.w = 1.0;
-        static_tf_broadcaster_->sendTransform(map_to_odom);
-        
+        base_link_to_laser.transform.translation.x = 0.0;
+        base_link_to_laser.transform.translation.y = 0.0;
+        base_link_to_laser.transform.translation.z = 0.0;
+
+        base_link_to_laser.transform.rotation.x = 0.0;
+        base_link_to_laser.transform.rotation.y = 0.0;
+        base_link_to_laser.transform.rotation.z = 0.0;
+        base_link_to_laser.transform.rotation.w = 1.0;
+        static_tf_broadcaster_->sendTransform(base_link_to_laser);
+
         // 每 0.1 秒更新一次机器人
         timer_ =
             this->create_wall_timer(
@@ -84,8 +91,18 @@ public:
                 [this]()
                 {
                     double dt = 0.1;
+
+                    auto current_time = this->get_clock()->now();
                     //用现在的速度和角速度更新机器人位置和朝向
                     robot.update(v, omega, dt);
+
+                    // 发布激光雷达扫描数据
+                    std::vector<double> ranges = lidar_.scan(
+                        robot.x,
+                        robot.y,
+                        robot.theta,
+                        world_
+                    );
 
                     //根据轮距和左右轮的速度计算里程计信息（更新x，y，theta）
                     double wheel_base = 0.4; // 假设轮距为 0.4 米
@@ -99,9 +116,21 @@ public:
                     double mesured_distance_right = right_encoder_.ticksToDistance(right_ticks);
                     odometry.update(mesured_distance_left, mesured_distance_right, wheel_base);
 
+                    // 发布激光雷达扫描数据
+                    sensor_msgs::msg::LaserScan scan_msg;
+                    scan_msg.header.stamp = current_time;
+                    scan_msg.header.frame_id = "laser_frame";
+                    scan_msg.angle_min = -M_PI ;
+                    scan_msg.angle_max = M_PI ;
+                    scan_msg.angle_increment = M_PI / 180.0; // 每1度扫描一次
+                    scan_msg.range_min = 0.0;
+                    scan_msg.range_max = 6.0;
+                    scan_msg.ranges.assign(ranges.begin(), ranges.end());
+                    scan_publisher_->publish(scan_msg);
+
                     // 发布里程计信息
                     nav_msgs::msg::Odometry odom_msg;
-                    odom_msg.header.stamp =this->get_clock()->now();//时间戳，告诉别人这条里程计数据产生的时间
+                    odom_msg.header.stamp = current_time;//时间戳，告诉别人这条里程计数据产生的时间
                     //这条 Odometry 消息描述的是 base_link 相对于 odom 的状态
                     odom_msg.header.frame_id = "odom";
                     odom_msg.child_frame_id = "base_link";
@@ -120,7 +149,7 @@ public:
 
                     // 发布机器人在世界坐标系中的位置和朝向
                     geometry_msgs::msg::TransformStamped transform;
-                    transform.header.stamp =this->get_clock()->now();
+                    transform.header.stamp = current_time;
                     transform.header.frame_id = "odom";
                     transform.child_frame_id = "base_link";
                     transform.transform.translation.x = odometry.x;
@@ -142,7 +171,7 @@ public:
                     // 发布机器人当前位置和朝向的 Marker 给 RViz
                     visualization_msgs::msg::Marker marker;
                     marker.header.frame_id = "map";
-                    marker.header.stamp = this->get_clock()->now();
+                    marker.header.stamp = current_time;
                     marker.ns = "robot";
                     marker.id = 0;
                     marker.type = visualization_msgs::msg::Marker::CYLINDER;
@@ -180,7 +209,7 @@ public:
                     // 发布轨迹
                     visualization_msgs::msg::Marker trajectory_marker;
                     trajectory_marker.header.frame_id = "map";
-                    trajectory_marker.header.stamp = this->get_clock()->now();
+                    trajectory_marker.header.stamp = current_time;
                     trajectory_marker.ns = "actual_trajectory";
                     trajectory_marker.id = 0;
                     trajectory_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
@@ -197,7 +226,7 @@ public:
                     // 发布里程计轨迹
                     visualization_msgs::msg::Marker odom_trajectory_marker;
                     odom_trajectory_marker.header.frame_id = "odom";
-                    odom_trajectory_marker.header.stamp = this->get_clock()->now();
+                    odom_trajectory_marker.header.stamp = current_time;
                     odom_trajectory_marker.ns = "odom_trajectory";
                     odom_trajectory_marker.id = 0;
                     odom_trajectory_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
@@ -227,31 +256,46 @@ private:
     Odometry odometry;
     WheelEncoder left_encoder_;
     WheelEncoder right_encoder_;
+    World world_; // 创建 World 对象，用于表示环境中的障碍物
+    Lidar lidar_;
     double v;
     double omega;
+   
     // 订阅 Controller 发来的速度
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr subscription_;
+   
     // 发布机器人当前位置和朝向给 Controller
     rclcpp::Publisher<geometry_msgs::msg::Pose2D>::SharedPtr pose_publisher_;
+   
     // 发布机器人当前位置和朝向的 Marker给RViz
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_publisher_;
+   
     // 发布机器人里程计信息给 Controller
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
+   
     // 定时器，用于定期更新机器人状态
     rclcpp::TimerBase::SharedPtr timer_;
+   
     // 记录机器人实际走过的路线点
     std::vector<geometry_msgs::msg::Point> trajectory_points_;
+   
     // 发布机器人实际走过的路线给RViz
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr trajectory_publisher_;
+   
     // 记录机器人里程计轨迹点
     std::vector<geometry_msgs::msg::Point>odom_trajectory_points_;
+   
     // 发布机器人里程计轨迹给RViz
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr odom_trajectory_publisher_;
+   
     // TF 广播器，用于发布机器人在世界坐标系中的位置和朝向
     std::unique_ptr<tf2_ros::TransformBroadcaster>tf_broadcaster_;
+   
     // 静态 TF 广播器，用于发布 map 到 odom 的静态变换    
     std::unique_ptr<tf2_ros::StaticTransformBroadcaster>static_tf_broadcaster_;
-    // 创建左右轮编码器对象，假设轮子半径为 0.1 米，每圈编码器脉冲数为 1000
+   
+    // 发布激光雷达扫描数据
+    rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr scan_publisher_;
 };
 
 
