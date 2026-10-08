@@ -15,34 +15,34 @@ World::World()
     };
 }
 
-bool World::isObstacle(
-    double x,
-    double y
-) const
+bool World::isObstacle(double x, double y) const
 {
     double half_size = obstacle_size / 2.0;
 
-    for (std::size_t grid_x = 0; grid_x < grid.size(); grid_x++)
-    {
-        for (std::size_t grid_y = 0; grid_y < grid[grid_x].size(); grid_y++)
-        {
-            if (grid[grid_x][grid_y] == 0)
-            {
-                continue;
-            }
-            
-            double obstacle_center_x = static_cast<double>(grid_x);
-            double obstacle_center_y = static_cast<double>(grid_y);
+    int grid_x = static_cast<int>(std::round(x));
+    int grid_y = static_cast<int>(std::round(y));
 
-        if (
-            std::abs(x - obstacle_center_x) <= half_size &&
-            std::abs(y - obstacle_center_y) <= half_size
-            )
-            {
-                return true;
-            }
-        }
+    // 检查是否超出地图数组范围
+    if (grid_x < 0 ||
+        grid_y < 0 ||
+        grid_x >= static_cast<int>(grid.size()) ||
+        grid_y >= static_cast<int>(grid[0].size()))
+    {
+        return false;
     }
 
-    return false;// 如果没有检测到障碍物，返回 false
+    // 对应位置没有障碍物
+    if (grid[grid_x][grid_y] == 0)
+    {
+        return false;
+    }
+
+    // 保留原来的0.8m方形障碍物模型
+    double obstacle_center_x = static_cast<double>(grid_x);
+    double obstacle_center_y = static_cast<double>(grid_y);
+
+    return (
+        std::abs(x - obstacle_center_x) <= half_size &&
+        std::abs(y - obstacle_center_y) <= half_size
+    );
 }

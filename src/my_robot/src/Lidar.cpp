@@ -51,11 +51,13 @@ double Lidar::castRay(
     double global_angle = robot_theta + relative_angle;
     double step = 0.02; // 步长
     double max_range = 6.0; // 最大射线长度
+    double direction_x = std::cos(global_angle);
+    double direction_y = std::sin(global_angle);
 
     for (double distance = 0.0; distance <= max_range; distance += step)
     {
-        double scan_x = robot_x + distance * std::cos(global_angle);
-        double scan_y = robot_y + distance * std::sin(global_angle);
+        double scan_x = robot_x + distance * direction_x;
+        double scan_y = robot_y + distance * direction_y;
 
         if (world.isObstacle(scan_x, scan_y)) // 使用World类的isObstacle方法
         {
@@ -75,7 +77,7 @@ std::vector<double> Lidar::scan(
 ) const
 {
     std::vector<double> ranges;
-    double angle_increment = M_PI / 180.0; // 每1度扫描一次
+    double angle_increment = M_PI / 1800.0; // 每1度扫描一次
     double angle_max = M_PI; // 最大扫描角度为180度
     double angle_min = -M_PI; // 最小扫描角度为-180度
     for (double angle = angle_min; angle <= angle_max; angle += angle_increment) // 每度扫描一次

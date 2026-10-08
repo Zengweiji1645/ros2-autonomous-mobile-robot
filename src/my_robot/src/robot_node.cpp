@@ -122,7 +122,7 @@ public:
                     scan_msg.header.frame_id = "laser_frame";
                     scan_msg.angle_min = -M_PI ;
                     scan_msg.angle_max = M_PI ;
-                    scan_msg.angle_increment = M_PI / 180.0; // 每1度扫描一次
+                    scan_msg.angle_increment = M_PI / 1800.0; // 每1度扫描一次
                     scan_msg.range_min = 0.0;
                     scan_msg.range_max = 6.0;
                     scan_msg.ranges.assign(ranges.begin(), ranges.end());
