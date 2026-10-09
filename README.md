@@ -16,35 +16,63 @@ A ROS 2 Jazzy mobile-robot simulation built in C++. The project combines custom 
 
 ## System Architecture
 
+The system is organized by responsibility. Solid arrows show major data and command flows; the Nav2 action link is bidirectional for goals and results.
+
 ```mermaid
-flowchart TD
-    User[Mission commands] -->|/mission_command| Mission[Custom MissionNode]
-    Config[waypoints.yaml] --> Mission
-    Mission <-->|NavigateToPose action| BT[Nav2 BT Navigator]
-    Mission -->|/mission_status| Status[Mission status]
+flowchart TB
+    U["User commands"] -->|"/mission_command"| M["MissionNode"]
+    Y["waypoints.yaml"] --> M
+    M -->|"/mission_status"| S["Mission status"]
 
-    BT --> Planner[Nav2 Planner Server]
-    BT --> Controller[Nav2 Controller Server: RPP]
-    Global[Global Costmap] --> Planner
-    Planner -->|Global path| Controller
-    Local[Local Costmap] --> Controller
+    subgraph NAV["Nav2 navigation"]
+        direction TB
+        BT["BT Navigator"]
+        P["Planner Server - Navfn"]
+        C["Controller Server - RPP"]
+        G["Global Costmap"]
+        L["Local Costmap"]
+        V["Velocity Smoother"]
+        CM["Collision Monitor"]
+        BT --> P
+        BT --> C
+        G --> P
+        P -->|"Global path"| C
+        L --> C
+        C -->|"/cmd_vel_nav"| V
+        V -->|"/cmd_vel_smoothed"| CM
+    end
 
-    Controller -->|/cmd_vel_nav| Smoother[Velocity Smoother]
-    Smoother -->|/cmd_vel_smoothed| Monitor[Collision Monitor]
-    Monitor -->|/cmd_vel| Robot[Custom RobotNode]
+    subgraph LOC["Mapping and localization"]
+        direction TB
+        SL["SLAM Toolbox"]
+        MAP["Occupancy map"]
+        TF["TF transforms"]
+        SL -->|"/map"| MAP
+        SL -->|"map to odom"| TF
+    end
 
-    Robot -->|/scan| SLAM[SLAM Toolbox]
-    Robot -->|/odom| SLAM
-    Robot -->|/scan| Global
-    Robot -->|/scan| Local
-    Robot -->|/scan| Monitor
-    Robot -->|/odom| Controller
-    SLAM -->|/map| Global
-    SLAM -->|map to odom TF| TF[TF Transform Tree]
-    Robot -->|odom to base_link TF| TF
-    TF --> Global
-    TF --> Local
-    TF --> Controller
+    subgraph SIM["Custom robot simulation"]
+        direction TB
+        R["RobotNode"]
+        SC["LiDAR /scan"]
+        OD["Wheel odometry /odom"]
+        R --> SC
+        R --> OD
+    end
+
+    M <-->|"NavigateToPose action"| BT
+    CM -->|"/cmd_vel"| R
+    SC --> SL
+    OD --> SL
+    SC --> G
+    SC --> L
+    SC --> CM
+    OD --> C
+    R -->|"odom to base_link"| TF
+    MAP --> G
+    TF --> G
+    TF --> L
+    TF --> C
 ```
 
 **Coordinate frames:** SLAM Toolbox provides the `map → odom` transform, while the robot odometry system provides `odom → base_link`. Together with the LiDAR sensor-frame transform, these let mapping and navigation components interpret measurements in their required coordinate frames.
