@@ -24,6 +24,7 @@ public:
     MissionNode()
         : Node("mission_node")
     {
+         this->declare_parameter<std::string>("waypoints_file","");
         // 创建一个导航客户端
          nav_client_ =
         rclcpp_action::create_client<NavigateToPose>(
@@ -55,6 +56,7 @@ public:
             this->get_logger(),
             "MissionNode started"
         );
+
     }
 
 private:
@@ -78,8 +80,17 @@ private:
     // 加载目标点数据
     void loadWaypoints()
 {
-    std::string file_path =
-        "/home/zengweiji/ros2_ws/src/my_robot/config/waypoints.yaml";
+   std::string file_path =
+    this->get_parameter("waypoints_file").as_string();
+
+if (file_path.empty())
+{
+    RCLCPP_ERROR(
+        this->get_logger(),
+        "Waypoint configuration path is empty"
+    );
+    return;
+}
 
     try
     {

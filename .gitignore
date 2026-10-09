@@ -4,6 +4,6 @@ log/
 
 .vscode/
 
-*.pyc
+# Python cache
 __pycache__/
-
+*.pyc
